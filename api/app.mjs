@@ -9,8 +9,9 @@ import sharp from 'sharp';
 import { ApiError,address,providers } from './providers.mjs';
 import { metaClient, META_PROTOCOLS, SPARK_MODELS } from './meta.mjs';
 import { installMetaRoutes } from './meta-routes.mjs';
+import { clawdClient } from './clawd.mjs';
 const id=()=>randomBytes(24).toString('base64url');
-export function createApp({env=process.env, provider=providers(env), meta=metaClient(env), now=()=>Date.now()}={}) {
+export function createApp({env=process.env, provider=providers(env), meta=metaClient(env), clawd=clawdClient(env), now=()=>Date.now()}={}) {
   const app=express(), challenges=new Map(),sessions=new Map(),quotes=new Map(),intents=new Map(),limits=new Map();
   // Enable only behind Railway's edge, which supplies the client X-Real-IP.
   const trustProxy=env.TRUST_PROXY==='1';
@@ -86,6 +87,9 @@ export function createApp({env=process.env, provider=providers(env), meta=metaCl
     // Retain the lock on ambiguous provider failures; prevent duplicate economic actions.
     const result=await provider.execute(intent,req.body.signed_tx);res.json(result);
   });
+  // Clawd voice-trader tickets for on-device review. The sc_ token is per-request, never stored here.
+  app.get('/api/gadget/clawd/pending',async(req,res)=>res.json(await clawd.pending(req.get('X-Clawd-Token'))));
+  app.delete('/api/gadget/clawd/pending/:id',async(req,res)=>res.json(await clawd.dismiss(req.get('X-Clawd-Token'),req.params.id)));
   app.post('/api/gadget/voice',async(req,res)=>res.json(await provider.voice(req.body.transcript,{model:req.body.model,protocol:req.body.protocol})));
   app.post('/api/gadget/rpc',async(req,res)=>{
     const {method,params}=req.body;
